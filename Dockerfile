@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.12-slim-trixie AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates \
+ && dpkg --compare-versions "$(dpkg-query -W -f='${Version}' ca-certificates)" ge 20250419+deb13u1 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
@@ -17,6 +18,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv pip install --system --no-cache .
+
+COPY scripts/check_trust_store.py ./scripts/check_trust_store.py
+RUN python scripts/check_trust_store.py
 
 EXPOSE 8765
 
