@@ -224,3 +224,5 @@ JPO 公式 API は自主制御責任を運用者に課している:
 ## ライセンス
 
 MIT — [LICENSE](LICENSE) 参照。
+
+Storage ownership, bounded log retention, and data flow: [storage lifecycle](docs/storage-lifecycle.md).

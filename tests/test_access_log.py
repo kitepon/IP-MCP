@@ -135,3 +135,26 @@ def test_extra_fields_are_merged(_isolated_log: Path) -> None:
     rec = _read(_isolated_log)[0]
     assert rec["client_id"] == "test-client"
     assert rec["trace_id"] == "abc123"
+
+
+def test_rotation_retains_two_complete_generations(_isolated_log: Path, monkeypatch) -> None:
+    monkeypatch.setattr(access_log, "MAX_LOG_BYTES", 200)
+    for i in range(7):
+        access_log.log_call(source="jpo_official", endpoint=f"/番号/{i}",
+                            elapsed_ms=1, outcome="ok")
+    paths = [Path(str(_isolated_log) + suffix) for suffix in [".2", ".1", ""]]
+    assert all(path.exists() and path.stat().st_size <= 200 for path in paths)
+    assert not Path(str(_isolated_log) + ".3").exists()
+    retained = [record["endpoint"] for path in paths for record in _read(path)]
+    assert retained == [f"/番号/{i}" for i in range(4, 7)]
+
+
+def test_rotation_failure_warns_without_breaking_api(_isolated_log: Path, monkeypatch, caplog):
+    monkeypatch.setattr(access_log, "MAX_LOG_BYTES", 1)
+    access_log.log_call(source="jpo_official", endpoint="/first", elapsed_ms=0, outcome="ok")
+    def fail():
+        raise OSError("disk unavailable")
+    monkeypatch.setattr(access_log._handle, "doRollover", fail)
+    access_log.log_call(source="jpo_official", endpoint="/next", elapsed_ms=0, outcome="ok")
+    assert "access log write failed" in caplog.text
+    assert _read(_isolated_log)[0]["endpoint"] == "/first"

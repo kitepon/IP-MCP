@@ -59,32 +59,37 @@ def main() -> int:
     skipped = 0
     total = 0
 
-    with path.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                skipped += 1
-                continue
-            try:
-                ts = datetime.fromisoformat(rec["ts"])
-            except (KeyError, ValueError):
-                skipped += 1
-                continue
-            if ts < cutoff:
-                continue
-            total += 1
-            ep = rec.get("endpoint", "?")
-            by_endpoint[ep] += 1
-            outcomes[rec.get("outcome", "?")] += 1
-            sources[rec.get("source", "?")] += 1
-            elapsed_by_endpoint[ep].append(float(rec.get("elapsed_ms", 0)))
-            remain = rec.get("remain_today")
-            if remain:
-                remain_by_endpoint[ep] = str(remain)
+    for generation in [path.with_name(path.name + ".2"), path.with_name(path.name + ".1"), path]:
+        try:
+            fh = generation.open(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    skipped += 1
+                    continue
+                try:
+                    ts = datetime.fromisoformat(rec["ts"])
+                except (KeyError, ValueError):
+                    skipped += 1
+                    continue
+                if ts < cutoff:
+                    continue
+                total += 1
+                ep = rec.get("endpoint", "?")
+                by_endpoint[ep] += 1
+                outcomes[rec.get("outcome", "?")] += 1
+                sources[rec.get("source", "?")] += 1
+                elapsed_by_endpoint[ep].append(float(rec.get("elapsed_ms", 0)))
+                remain = rec.get("remain_today")
+                if remain:
+                    remain_by_endpoint[ep] = str(remain)
 
     print(f"=== access log summary - last {args.days} day(s) ===")
     print(f"window starts: {cutoff.isoformat()}")
