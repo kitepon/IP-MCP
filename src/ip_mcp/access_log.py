@@ -21,9 +21,9 @@ Fields (all optional except ts/source/endpoint/elapsed_ms/outcome):
     remain_today  : JPO remainAccessCount (only for jpo_official, may be absent)
     error         : truncated exception message (only when outcome indicates failure)
 
-The file is opened in append-only mode with line buffering. Concurrent writes
-from a single async event loop are safe (line-buffered + atomic short writes
-on POSIX). Single-process is the only supported deployment.
+The active file rotates at 10 MiB with two backup generations. A single record
+may exceed that threshold. A lock covers rotation and writes; only single-process
+deployment is supported.
 """
 
 from __future__ import annotations
@@ -32,24 +32,27 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from threading import Lock
-from typing import Any, TextIO
+from typing import Any
 
 log = logging.getLogger(__name__)
 
 DEFAULT_PATH = "/app/logs/access.jsonl"
+MAX_LOG_BYTES = 10 * 1024 * 1024
+BACKUP_COUNT = 2
 
 _lock = Lock()
-_handle: TextIO | None = None
+_handle: RotatingFileHandler | None = None
 _handle_path: str | None = None
 
 
-def _get_handle() -> TextIO | None:
+def _get_handle() -> RotatingFileHandler | None:
     """Lazily open the log file. Returns None if opening failed (logging-only fallback)."""
     global _handle, _handle_path
     target_path = os.getenv("ACCESS_LOG_PATH", DEFAULT_PATH).strip() or DEFAULT_PATH
-    if _handle is not None and _handle_path == target_path:
+    if _handle is not None and _handle_path == target_path and _handle.stream is not None:
         return _handle
     # Path changed (e.g. tests) — close old handle
     if _handle is not None:
@@ -61,7 +64,9 @@ def _get_handle() -> TextIO | None:
         _handle_path = None
     try:
         Path(target_path).parent.mkdir(parents=True, exist_ok=True)
-        _handle = open(target_path, "a", encoding="utf-8", buffering=1)  # line-buffered
+        _handle = RotatingFileHandler(
+            target_path, maxBytes=MAX_LOG_BYTES, backupCount=BACKUP_COUNT, encoding="utf-8"
+        )
         _handle_path = target_path
         log.info("access log: writing to %s", target_path)
         return _handle
@@ -118,6 +123,10 @@ def log_call(
         if handle is None:
             return
         try:
-            handle.write(line)
+            stream = handle.stream
+            if stream.tell() and stream.tell() + len(line.encode("utf-8")) > handle.maxBytes:
+                handle.doRollover()
+            handle.stream.write(line)
+            handle.flush()
         except OSError as exc:
             log.warning("access log write failed: %s", exc)

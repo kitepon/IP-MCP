@@ -222,3 +222,5 @@ The port binding in `docker-compose.yml` defaults to `127.0.0.1:8765` (same-mach
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Storage ownership, bounded log retention, and data flow: [storage lifecycle](docs/storage-lifecycle.md).

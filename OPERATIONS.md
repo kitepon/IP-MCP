@@ -204,3 +204,7 @@ Cloudflare Tunnel 経由のため、LAN 内/外を問わず CF エッジ経由�
 1. **DNS 解決失敗**: `nslookup ipmcp.<domain>` で Cloudflare の IP (104.x / 172.x 帯) が返るか確認。返らない場合はクライアント側 DNS の問題（社内 DNS 等が CF レコードをブロックしている）。
 2. **CF Tunnel ダウン**: 上記「iPhone Claude から繋がらない」の項 3 を確認。
 3. **OAuth issuer の不整合**: 旧ドメイン (例: 以前使っていた動的 DNS ドメイン) で発行したトークンを保持しているクライアントを新ドメインで使うと不整合になる。クライアント側の登録を新ドメインで作り直す。
+
+## Access log retention
+
+`logs/access.jsonl` rotates at 10 MiB and retains two previous generations (`.1`, `.2`). One record may exceed that threshold. The summary command reads all three files, oldest first; `--days` filters the retained records and cannot recover discarded history. Keep a separate archive if permanent audit retention is required. Rotation and writes share the single-process writer lock. A write or rotation failure emits a warning and does not fail the API call. See [storage ownership and data flow](docs/storage-lifecycle.md).
